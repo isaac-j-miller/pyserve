@@ -1,23 +1,38 @@
+
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import List, Tuple, Type
+from typing import DefaultDict, Literal, List, Tuple, Type, Union
 
 from .handler import RequestHandler
 from .request import Request
 from .response import Response;
 
+
+class PatternMiddlewares(DefaultDict[str, List[RequestHandler]]):
+    pass
+
+class ReqHandlerDefaultDict(DefaultDict[str, RequestHandler]):
+    pass
+
+HttpMethod = Union[Literal["get"], Literal["head"], Literal["put"], Literal["post"], Literal["patch"], Literal["delete"]]
+class RequestHandlers:
+    def __init__(self):
+        self.get = ReqHandlerDefaultDict()
+        self.head = ReqHandlerDefaultDict()
+        self.put = ReqHandlerDefaultDict()
+        self.post = ReqHandlerDefaultDict()
+        self.patch = ReqHandlerDefaultDict()
+        self.delete = ReqHandlerDefaultDict()
+
+    # TODO: verify this works
+    def __getitem__(self, name: HttpMethod) -> ReqHandlerDefaultDict:
+        return self.__getattribute__(name)
+
 class Pyserve:
     def __init__(self, host: str, port: int, server_class: Type[HTTPServer]=HTTPServer):
         self.host = host
         self.port = port
-        self.pattern_middlewares = {}
-        self.request_handlers = {
-            "get": {},
-            "head": {},
-            "put": {},
-            "post": {},
-            "patch": {},
-            "delete": {}
-        }
+        self.pattern_middlewares = PatternMiddlewares()
+        self.request_handlers = RequestHandlers()
         self.server_class = server_class
         self.server = None
 
@@ -28,38 +43,38 @@ class Pyserve:
             self.pattern_middlewares[pattern] = [middleware]
     
     def get(self, pattern: str, handler: RequestHandler):
-        self.request_handlers["get"][pattern] = handler
+        self.request_handlers.get[pattern] = handler
 
     def head(self, pattern: str, handler: RequestHandler):
-        self.request_handlers["head"][pattern] = handler
+        self.request_handlers.head[pattern] = handler
 
     def put(self, pattern: str, handler: RequestHandler):
-        self.request_handlers["put"][pattern] = handler
+        self.request_handlers.put[pattern] = handler
 
     def post(self, pattern: str, handler: RequestHandler):
-        self.request_handlers["post"][pattern] = handler
+        self.request_handlers.post[pattern] = handler
 
     def patch(self, pattern: str, handler: RequestHandler):
-        self.request_handlers["patch"][pattern] = handler
+        self.request_handlers.patch[pattern] = handler
 
     def delete(self, pattern: str, handler: RequestHandler):
-        self.request_handlers["delete"][pattern] = handler
+        self.request_handlers.delete[pattern] = handler
 
     def _pattern_matches(self, pattern: str, path: str) -> bool:
         # TODO: implement a matching function that actually does something
         return pattern == path or pattern == "*"
 
     def _get_middlewares(self, path: str) -> List[RequestHandler]: 
-        middlewares = []
+        middlewares: List[RequestHandler] = []
         for key, value in self.pattern_middlewares.items():
             if self._pattern_matches(key, path):
                 middlewares.extend(value)
         return middlewares
     
-    def _get_handler(self, path: str, method: str) -> Tuple[RequestHandler, str]:
+    def _get_handler(self, path: str, method: HttpMethod) -> Union[None, Tuple[RequestHandler, str]]:
         for key, value in self.request_handlers[method].items():
             if self._pattern_matches(key, path):
-                return [value, key]
+                return value, key
         return None
 
     def _generate_http_request_handler(self):
@@ -69,11 +84,11 @@ class Pyserve:
             def _generate_response(_self) -> Response:
                 return Response(_self)
             
-            def _handle_method(_self, method: str):
+            def _handle_method(_self, method: HttpMethod):
                 middlewares = self._get_middlewares(_self.path)
                 handlerPattern = self._get_handler(_self.path, method)
                 if handlerPattern is None:
-                    _self.close_connection = 1
+                    _self.close_connection = True
                     return
                 handler, pattern = handlerPattern
                 all_handlers = [*middlewares, handler]
@@ -85,14 +100,21 @@ class Pyserve:
                 try:
                     for handler_function in all_handlers:
                         handler_function(request, response)
+                        if response.hasBeenSent():
+                            break
                 finally:
-                    status, headers, body = response.get_response()
+                    resp = response.get_response()
+                    if resp is None:
+                        return
+                    
+                    status, headers, body = resp
+                    _self.send_response(status)
                     for header_name, header_value in headers.items():
                         _self.send_header(header_name, header_value)
-                    _self.close_connection = 1
-                    # TODO: fix this because for some reason it includes everything incl headers in the response body
-                    _self.send_response(status, body)
                     _self.end_headers()
+                    _self.wfile.write(body)
+                    _self.close_connection = True
+                    
 
             def do_GET(_self):
                 return _self._handle_method("get")
