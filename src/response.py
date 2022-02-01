@@ -1,9 +1,9 @@
 from http.server import BaseHTTPRequestHandler
 from mimetypes import guess_type
 from json import dumps
-from typing import Tuple, Union
+from typing import Any, Dict, Tuple, Union
 
-from .types import JsonBody, Headers
+from .types import Headers
 
 class Response:
     def __init__(self, handler: BaseHTTPRequestHandler):
@@ -26,7 +26,7 @@ class Response:
         self.header("Content-Length", str(len(self._body)))
         self._sent = True
 
-    def send_json(self, body: JsonBody):
+    def send_json(self, body: Dict[Any, Any]):
         json_body = dumps(body).encode(encoding="utf_8")
         self.header("Content-Type", "application/json; charset=UTF-8")
         self._send(json_body)

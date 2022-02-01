@@ -1,33 +1,16 @@
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import DefaultDict, Literal, List, Tuple, Type, Union
+from typing import List, Tuple, Type, Union
 
-from .handler import RequestHandler
+from .router import Router
+from .handler import HttpMethod, RequestHandler, PatternMiddlewares, RequestHandlers
 from .request import Request
 from .response import Response;
 
 
-class PatternMiddlewares(DefaultDict[str, List[RequestHandler]]):
-    pass
 
-class ReqHandlerDefaultDict(DefaultDict[str, RequestHandler]):
-    pass
 
-HttpMethod = Union[Literal["get"], Literal["head"], Literal["put"], Literal["post"], Literal["patch"], Literal["delete"]]
-class RequestHandlers:
-    def __init__(self):
-        self.get = ReqHandlerDefaultDict()
-        self.head = ReqHandlerDefaultDict()
-        self.put = ReqHandlerDefaultDict()
-        self.post = ReqHandlerDefaultDict()
-        self.patch = ReqHandlerDefaultDict()
-        self.delete = ReqHandlerDefaultDict()
-
-    # TODO: verify this works
-    def __getitem__(self, name: HttpMethod) -> ReqHandlerDefaultDict:
-        return self.__getattribute__(name)
-
-class Pyserve:
+class Pyserve(Router):
     def __init__(self, host: str, port: int, server_class: Type[HTTPServer]=HTTPServer):
         self.host = host
         self.port = port
@@ -35,30 +18,6 @@ class Pyserve:
         self.request_handlers = RequestHandlers()
         self.server_class = server_class
         self.server = None
-
-    def use(self, pattern: str, middleware: RequestHandler):
-        if pattern in self.pattern_middlewares.keys():
-            self.pattern_middlewares[pattern] = [*self.pattern_middlewares[pattern], middleware]
-        else:
-            self.pattern_middlewares[pattern] = [middleware]
-    
-    def get(self, pattern: str, handler: RequestHandler):
-        self.request_handlers.get[pattern] = handler
-
-    def head(self, pattern: str, handler: RequestHandler):
-        self.request_handlers.head[pattern] = handler
-
-    def put(self, pattern: str, handler: RequestHandler):
-        self.request_handlers.put[pattern] = handler
-
-    def post(self, pattern: str, handler: RequestHandler):
-        self.request_handlers.post[pattern] = handler
-
-    def patch(self, pattern: str, handler: RequestHandler):
-        self.request_handlers.patch[pattern] = handler
-
-    def delete(self, pattern: str, handler: RequestHandler):
-        self.request_handlers.delete[pattern] = handler
 
     def _pattern_matches(self, pattern: str, path: str) -> bool:
         # TODO: implement a matching function that actually does something
